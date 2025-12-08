@@ -26,7 +26,7 @@ class EmbeddingConfig:
 @dataclass
 class VerificationConfig:
     """Speaker verification configuration."""
-    similarity_threshold: float = 0.5
+    similarity_threshold: float = 0.7
     min_enrollment_samples: int = 3
 
 

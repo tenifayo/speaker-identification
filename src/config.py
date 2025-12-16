@@ -31,6 +31,22 @@ class VerificationConfig:
 
 
 @dataclass
+class LivenessConfig:
+    """Liveness detection configuration."""
+    enabled: bool = True
+    sentence_complexity: str = "simple"  # simple, medium, complex
+    match_threshold: float = 0.9  # Fuzzy matching threshold
+    challenge_expiry_seconds: int = 120  # 2 minutes
+
+
+@dataclass
+class TranscriptionConfig:
+    """Speech-to-text transcription configuration."""
+    model: str = "whisper-large-v3"  # Groq Whisper model
+    language: str = "en"
+
+
+@dataclass
 class DatabaseConfig:
     """Database configuration."""
     db_path: Path = field(default_factory=lambda: Path("data/users.db"))
@@ -43,6 +59,8 @@ class Config:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     verification: VerificationConfig = field(default_factory=VerificationConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    liveness: LivenessConfig = field(default_factory=LivenessConfig)
+    transcription: TranscriptionConfig = field(default_factory=TranscriptionConfig)
 
     def __post_init__(self):
         # Auto-detect CUDA availability

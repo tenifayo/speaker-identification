@@ -17,6 +17,7 @@ from .enrollment import (
 )
 from .verification import verify_speaker, identify_speaker
 from .database import get_database
+from .liveness import generate_challenge, LivenessError
 
 
 app = FastAPI(
@@ -41,6 +42,7 @@ class VerificationResponse(BaseModel):
     score: float
     threshold: float
     decision: str
+    liveness_result: Optional[dict] = None
 
 
 class UserInfo(BaseModel):
@@ -55,6 +57,13 @@ class IdentifyResult(BaseModel):
     user_id: str
     name: str
     score: float
+
+
+class ChallengeResponse(BaseModel):
+    challenge_id: str
+    sentence: str
+    expires_at: str
+    user_id: Optional[str] = None
 
 
 # ==================== Helper Functions ====================
@@ -92,9 +101,9 @@ async def enroll(
     """
     Enroll a new user with audio samples.
     
-    - **user_id**: Unique identifier for the user
-    - **name**: Display name
-    - **audio_files**: At least 3 audio samples (WAV, MP3, etc.)
+    - user_id: Unique identifier for the user
+    - name: Display name
+    - audio_files: At least 3 audio samples (WAV, MP3, etc.)
     """
     paths = []
     try:
@@ -140,28 +149,38 @@ async def update_user_enrollment(
 async def verify(
     user_id: str = Form(...),
     audio_file: UploadFile = File(...),
-    threshold: Optional[float] = Form(None)
+    threshold: Optional[float] = Form(None),
+    challenge_id: Optional[str] = Form(None)
 ):
     """
     Verify if audio matches claimed speaker identity.
     
     - **user_id**: Claimed speaker ID
     - **audio_file**: Test audio sample
-    - **threshold**: Optional custom threshold (default: 0.5)
+    - **threshold**: Optional custom threshold (default: 0.7)
+    - **challenge_id**: Optional challenge ID for liveness detection
     """
     paths = []
     try:
         paths = await save_upload_files([audio_file])
-        result = verify_speaker(paths[0], user_id, threshold=threshold)
+        result = verify_speaker(
+            paths[0], 
+            user_id, 
+            threshold=threshold,
+            challenge_id=challenge_id
+        )
         return VerificationResponse(
             user_id=result.user_id,
             is_verified=result.is_verified,
             score=result.score,
             threshold=result.threshold,
-            decision=result.decision
+            decision=result.decision,
+            liveness_result=result.liveness_result
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except LivenessError as e:
+        raise HTTPException(status_code=400, detail=f"Liveness check failed: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -235,10 +254,61 @@ async def get_logs(user_id: Optional[str] = None, limit: int = 100):
             "timestamp": log.timestamp.isoformat(),
             "decision": log.decision,
             "score": log.score,
-            "threshold": log.threshold
+            "threshold": log.threshold,
+            "challenge_id": log.challenge_id,
+            "transcription": log.transcription,
+            "sentence_match": log.sentence_match,
+            "liveness_passed": log.liveness_passed
         }
         for log in logs
     ]
+
+
+@app.post("/challenge/generate", response_model=ChallengeResponse)
+async def create_challenge(
+    user_id: Optional[str] = Form(None),
+    complexity: Optional[str] = Form(None)
+):
+    """
+    Generate a new liveness detection challenge.
+    
+    - **user_id**: Optional user ID for verification challenges
+    - **complexity**: Sentence complexity (simple, medium, complex)
+    
+    Returns a challenge ID and sentence that the user must speak.
+    """
+    try:
+        challenge_id, sentence, expires_at = generate_challenge(
+            user_id=user_id,
+            complexity=complexity
+        )
+        return ChallengeResponse(
+            challenge_id=challenge_id,
+            sentence=sentence,
+            expires_at=expires_at.isoformat(),
+            user_id=user_id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/challenge/{challenge_id}")
+async def get_challenge_details(challenge_id: str):
+    """Get challenge details by ID."""
+    db = get_database()
+    challenge = db.get_challenge(challenge_id)
+    
+    if challenge is None:
+        raise HTTPException(status_code=404, detail=f"Challenge '{challenge_id}' not found")
+    
+    return {
+        "challenge_id": challenge.id,
+        "sentence": challenge.sentence,
+        "user_id": challenge.user_id,
+        "created_at": challenge.created_at.isoformat(),
+        "expires_at": challenge.expires_at.isoformat(),
+        "used": challenge.used
+    }
 
 
 @app.get("/health")

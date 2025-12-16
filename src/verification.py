@@ -18,6 +18,7 @@ class VerificationResult:
     score: float
     threshold: float
     decision: str  # 'granted' | 'denied'
+    liveness_result: Optional[dict] = None  # Liveness detection details
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -40,7 +41,8 @@ def verify_speaker(
     audio_path: Union[str, Path],
     claimed_user_id: str,
     threshold: float = None,
-    log_access: bool = True
+    log_access: bool = True,
+    challenge_id: Optional[str] = None
 ) -> VerificationResult:
     """
     Verify if audio matches claimed speaker identity.
@@ -50,6 +52,7 @@ def verify_speaker(
         claimed_user_id: ID of claimed speaker
         threshold: Similarity threshold (default from config)
         log_access: Whether to log the access attempt
+        challenge_id: Optional challenge ID for liveness detection
     
     Returns:
         VerificationResult with decision and score
@@ -57,6 +60,8 @@ def verify_speaker(
     Raises:
         ValueError: If claimed user not found
     """
+    from .liveness import validate_challenge, LivenessError
+    
     threshold = threshold or config.verification.similarity_threshold
     
     db = get_database()
@@ -65,6 +70,22 @@ def verify_speaker(
     if stored_embedding is None:
         raise ValueError(f"User '{claimed_user_id}' not found")
     
+    # Liveness detection (if enabled and challenge provided)
+    liveness_result = None
+    liveness_passed = True
+    
+    if config.liveness.enabled and challenge_id:
+        try:
+            liveness_check = validate_challenge(challenge_id, Path(audio_path))
+            liveness_result = liveness_check.to_dict()
+            liveness_passed = liveness_check.passed
+        except LivenessError as e:
+            liveness_result = {
+                "passed": False,
+                "error": str(e)
+            }
+            liveness_passed = False
+    
     # Extract embedding from test audio
     extractor = get_extractor()
     test_embedding = extractor.extract_from_file(audio_path, preprocess=True)
@@ -72,20 +93,31 @@ def verify_speaker(
     # Compute similarity
     score = cosine_similarity(test_embedding, stored_embedding)
     
-    # Make decision
-    is_verified = score >= threshold
+    # Make decision (both voice AND liveness must pass)
+    voice_verified = score >= threshold
+    is_verified = voice_verified and liveness_passed
     decision = "granted" if is_verified else "denied"
     
     # Log access attempt
     if log_access:
-        db.log_access(claimed_user_id, decision, score, threshold)
+        db.log_access(
+            claimed_user_id, 
+            decision, 
+            score, 
+            threshold,
+            challenge_id=challenge_id if liveness_result else None,
+            transcription=liveness_result.get('transcribed_text') if liveness_result else None,
+            sentence_match=liveness_result.get('passed') if liveness_result else None,
+            liveness_passed=liveness_passed if liveness_result else None
+        )
     
     return VerificationResult(
         user_id=claimed_user_id,
         is_verified=is_verified,
         score=score,
         threshold=threshold,
-        decision=decision
+        decision=decision,
+        liveness_result=liveness_result
     )
 
 

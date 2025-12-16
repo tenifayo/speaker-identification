@@ -8,7 +8,8 @@ venv/
 env/
 ENV/
 
-samples/
+#environment variables
+.env
 
 # Testing
 .pytest_cache/
@@ -30,3 +31,5 @@ Thumbs.db
 # Logs
 *.log
 access_logs.txt
+
+samples/

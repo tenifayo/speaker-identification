@@ -12,4 +12,4 @@ samples/
 tests/
 access_logs.txt
 run_server.bat
-
+.pytest_cache/

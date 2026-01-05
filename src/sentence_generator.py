@@ -23,17 +23,15 @@ MEDIUM_TEMPLATES = [
     "The {adjective} {object} belongs to my {relation}",
     "Every {day} I {activity} with my {relation}",
     "My {relation} has a {color} {object}",
-    "I remember the {adjective} {time_period} last {season}",
     "The {number} {color} {object}s are in the {location}",
     "I prefer {activity} over {activity} on weekends",
-    "My {relation} enjoys {activity} during {season}",
+
 ]
 
 COMPLEX_TEMPLATES = [
-    "Last {season} I went to the {location} and saw a {color} {object}",
+    "On {day} I went to the {location} and saw a {color} {object}",
     "My {relation} told me that {activity} is better than {activity}",
     "I believe the {adjective} {object} should be placed in the {location}",
-    "During {season} the {adjective} weather makes me want to {activity}",
     "The {number} {color} {object}s that I saw were absolutely {adjective}",
 ]
 
@@ -50,7 +48,6 @@ WORD_BANKS = {
     "day": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
     "number": ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"],
     "relation": ["friend", "family", "colleague", "neighbor", "brother", "sister", "parent"],
-    "season": ["spring", "summer", "autumn", "winter"],
 }
 
 
@@ -119,7 +116,7 @@ class SentenceGenerator:
         return results
 
 
-def generate_sentence(complexity: Literal["simple", "medium", "complex"] = "simple") -> tuple[str, str]:
+def generate_sentence(complexity: Literal["simple", "medium", "complex"] = "medium") -> tuple[str, str]:
     """
     Convenience function to generate a single sentence.
     

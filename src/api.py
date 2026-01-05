@@ -6,6 +6,7 @@ import shutil
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .enrollment import (
@@ -21,9 +22,18 @@ from .liveness import generate_challenge, LivenessError
 
 
 app = FastAPI(
-    title="Speaker Identification API",
+    title="Speaker Recognition API",
     description="REST API for speaker enrollment and verification",
     version="1.0.0"
+)
+
+# Add CORS middleware to allow Streamlit UI requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins in development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -243,7 +253,7 @@ async def delete_user(user_id: str):
 
 
 @app.get("/logs")
-async def get_logs(user_id: Optional[str] = None, limit: int = 100):
+async def get_logs(user_id: Optional[str] = None, limit: int = 50):
     """Get access logs."""
     db = get_database()
     logs = db.get_access_logs(user_id=user_id, limit=limit)

@@ -257,10 +257,10 @@ class Database:
                     decision=row['decision'],
                     score=row['score'],
                     threshold=row['threshold'],
-                    challenge_id=row['challenge_id'],
-                    transcription=row['transcription'],
-                    sentence_match=bool(row['sentence_match']) if row['sentence_match'] is not None else None,
-                    liveness_passed=bool(row['liveness_passed']) if row['liveness_passed'] is not None else None
+                    challenge_id=dict(row).get('challenge_id'),
+                    transcription=dict(row).get('transcription'),
+                    sentence_match=bool(row['sentence_match']) if dict(row).get('sentence_match') is not None else None,
+                    liveness_passed=bool(row['liveness_passed']) if dict(row).get('liveness_passed') is not None else None
                 )
                 for row in rows
             ]

@@ -5,8 +5,6 @@ __pycache__/
 
 # Virtual Environment
 venv/
-env/
-ENV/
 
 #environment variables
 .env
@@ -33,3 +31,4 @@ Thumbs.db
 access_logs.txt
 
 samples/
+.streamlit/

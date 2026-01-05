@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-
+from unittest.mock import MagicMock, patch
 
 class TestVerification:
     """Test verification functions."""
@@ -47,6 +47,50 @@ class TestVerification:
             score = cosine_similarity(a, b)
             
             assert -1.0 <= score <= 1.0
+            
+    @patch('src.verification.get_database')
+    @patch('src.verification.get_extractor')
+    @patch('src.liveness.validate_challenge')
+    def test_verify_speaker_with_liveness(self, mock_validate, mock_get_extractor, mock_get_db, tmp_path):
+        """Test verification with liveness check."""
+        from src.verification import verify_speaker
+        
+        # Mock DB
+        mock_db = MagicMock()
+        mock_db.get_user_embedding.return_value = np.ones(192)
+        mock_get_db.return_value = mock_db
+        
+        # Mock Extractor
+        mock_extractor = MagicMock()
+        mock_extractor.extract_from_file.return_value = np.ones(192) # Perfect match
+        mock_get_extractor.return_value = mock_extractor
+        
+        # Mock Liveness (Passed)
+        mock_liveness_result = MagicMock()
+        mock_liveness_result.passed = True
+        mock_liveness_result.to_dict.return_value = {"passed": True}
+        mock_validate.return_value = mock_liveness_result
+        
+        # Test passed
+        result = verify_speaker(
+            audio_path=tmp_path / "test.wav",
+            claimed_user_id="user1",
+            challenge_id="valid_challenge"
+        )
+        assert result.is_verified
+        assert result.liveness_result["passed"]
+        
+        # Mock Liveness (Failed)
+        mock_liveness_result.passed = False
+        mock_liveness_result.to_dict.return_value = {"passed": False}
+        
+        result = verify_speaker(
+            audio_path=tmp_path / "test.wav",
+            claimed_user_id="user1",
+            challenge_id="valid_challenge"
+        )
+        assert not result.is_verified
+        assert not result.liveness_result["passed"]
 
 
 class TestDatabase:
@@ -71,7 +115,8 @@ class TestDatabase:
         assert user.id == "test1"
         assert user.name == "Test User"
         assert user.num_samples == 3
-        assert np.allclose(user.embedding, embedding)
+        # Use almost equal for float comparison
+        np.testing.assert_array_almost_equal(user.embedding, embedding)
     
     def test_duplicate_user(self, temp_db):
         """Test that duplicate users are rejected."""
@@ -112,3 +157,21 @@ class TestDatabase:
         
         logs = temp_db.get_access_logs("test1")
         assert len(logs) == 2
+    
+    def test_challenge_operations(self, temp_db):
+        """Test challenge table operations."""
+        from datetime import datetime, timedelta
+        
+        expires = datetime.now() + timedelta(minutes=5)
+        success = temp_db.create_challenge("c1", "test sentence", expires, "user1")
+        assert success
+        
+        challenge = temp_db.get_challenge("c1")
+        assert challenge is not None
+        assert challenge.sentence == "test sentence"
+        assert not challenge.used
+        
+        # Mark used
+        temp_db.mark_challenge_used("c1")
+        challenge = temp_db.get_challenge("c1")
+        assert challenge.used
